@@ -1,0 +1,88 @@
+mr2@mr2-jetson:~/jetson-orin-librealsense/build$ ros2 run realsense2_camera realsense2_camera_node
+[INFO] [1748720438.739941355] [camera.camera]: RealSense ROS v4.55.1
+[INFO] [1748720438.740197602] [camera.camera]: Built with LibRealSense v2.55.1
+[INFO] [1748720438.740247009] [camera.camera]: Running with LibRealSense v2.55.1
+[INFO] [1748720438.792785814] [camera.camera]: Device with serial number 243222076777 was found.
+
+[INFO] [1748720438.793008398] [camera.camera]: Device with physical ID /sys/devices/platform/bus@0/3610000.usb/usb2/2-1/2-1.3/2-1.3:1.0/video4linux/video0 was found.
+[INFO] [1748720438.793044333] [camera.camera]: Device with name Intel RealSense D435I was found.
+[INFO] [1748720438.793441279] [camera.camera]: Device with port number 2-1.3 was found.
+[INFO] [1748720438.793483550] [camera.camera]: Device USB type: 3.2
+[INFO] [1748720438.793710614] [camera.camera]: getParameters...
+[INFO] [1748720438.794245124] [camera.camera]: JSON file is not provided
+[INFO] [1748720438.794284803] [camera.camera]: Device Name: Intel RealSense D435I
+[INFO] [1748720438.794308450] [camera.camera]: Device Serial No: 243222076777
+[INFO] [1748720438.794328737] [camera.camera]: Device physical port: /sys/devices/platform/bus@0/3610000.usb/usb2/2-1/2-1.3/2-1.3:1.0/video4linux/video0
+[INFO] [1748720438.794348768] [camera.camera]: Device FW version: 5.16.0.1
+[INFO] [1748720438.794364416] [camera.camera]: Device Product ID: 0x0B3A
+[INFO] [1748720438.794379455] [camera.camera]: Sync Mode: Off
+[WARN] [1748720438.977715725] [camera.camera]: Could not set param: rgb_camera.power_line_frequency with 3 Range: [0, 2]: parameter 'rgb_camera.power_line_frequency' could not be set: Parameter {rgb_camera.power_line_frequency} doesn't comply with integer range.
+[INFO] [1748720438.998021972] [camera.camera]: Stopping Sensor: Depth Module
+[INFO] [1748720438.998221613] [camera.camera]: Stopping Sensor: RGB Camera
+[INFO] [1748720438.998271691] [camera.camera]: Stopping Sensor: Motion Module
+[INFO] [1748720439.040040561] [camera.camera]: Starting Sensor: Depth Module
+[INFO] [1748720439.064926394] [camera.camera]: Open profile: stream_type: Infra(1), Format: Y8, Width: 848, Height: 480, FPS: 30
+[INFO] [1748720439.065087988] [camera.camera]: Open profile: stream_type: Infra(2), Format: Y8, Width: 848, Height: 480, FPS: 30
+[INFO] [1748720439.065133299] [camera.camera]: Open profile: stream_type: Depth(0), Format: Z16, Width: 848, Height: 480, FPS: 30
+[INFO] [1748720439.067336135] [camera.camera]: Starting Sensor: RGB Camera
+[INFO] [1748720439.080322569] [camera.camera]: Open profile: stream_type: Color(0), Format: RGB8, Width: 1280, Height: 720, FPS: 30
+ 01/06 04:40:39,091 WARNING [281473005185248] (ds-calib-parsers.cpp:35) IMU Calibration is not available, default intrinsic and extrinsic will be used.
+[INFO] [1748720439.094075120] [camera.camera]: Starting Sensor: Motion Module
+[INFO] [1748720439.101461075] [camera.camera]: Open profile: stream_type: Accel(0)Format: MOTION_XYZ32F, FPS: 100
+[INFO] [1748720439.101525200] [camera.camera]: Open profile: stream_type: Gyro(0)Format: MOTION_XYZ32F, FPS: 200
+[INFO] [1748720439.110088522] [camera.camera]: RealSense Node Is Up!
+[WARN] [1748720440.042053079] [camera.camera]: XXX Hardware Notification:Right MIPI error,1.74872e+12,Error,Hardware Error
+[WARN] [1748720440.042383820] [camera.camera]: Hardware Notification:Right MIPI error,1.74872e+12,Error,Hardware Error
+
+Do you know why this hardware error occurs??
+
+ChatGPT said:
+Yes — the "Right MIPI error" you're seeing from the RealSense D435i on your Jetson Orin typically relates to an issue in the MIPI interface, which connects the image sensors (especially the RGB sensor) to the main processor inside the camera. This kind of error is usually caused by one of the following:
+
+✅ Common Causes of "Right MIPI Error"
+Power Supply Issues
+
+If the USB port doesn’t provide sufficient power (especially on embedded platforms like Jetson), sensors can behave unpredictably.
+
+Fix: Try using a powered USB 3.0 hub or connect to a different port with guaranteed 900mA (USB 3.0 standard).
+
+Faulty or Loose USB Cable
+
+A low-quality or damaged cable may not maintain a reliable high-speed connection.
+
+Fix: Use a short, shielded, high-quality USB 3.0 cable (preferably the original one from Intel).
+
+Camera Firmware
+
+Older firmware versions (like your 5.16.0.1) may not work well with newer systems or may have known MIPI issues.
+
+Fix: Update to the latest firmware using the realsense-viewer tool or Intel’s firmware update utility.
+
+Temperature or Initialization Glitch
+
+Sometimes the internal sensor doesn't initialize correctly due to boot timing or heat-related issues.
+
+Fix: Unplug and replug the camera, and cold-reboot the system if needed.
+
+Camera Hardware Defect
+
+If none of the above work and you're consistently seeing the "Right MIPI error", the RGB sensor or its connection inside the camera may be faulty.
+
+Fix: Try testing on another machine. If the error persists, contact Intel RealSense support for RMA/replacement.
+
+🔍 Additional Tips
+You can use the command:
+
+bash
+Copy
+Edit
+rs-enumerate-devices -c
+to get detailed sensor status and see if the RGB module is failing to initialize properly.
+
+If you're using ROS 2 with realsense2_camera, you can also try disabling the RGB stream temporarily to verify if the rest of the system works fine:
+
+bash
+Copy
+Edit
+ros2 run realsense2_camera realsense2_camera_node --ros-args -p enable_rgb:=false
+Would you like help with updating the firmware or verifying USB power?

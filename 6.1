@@ -1,0 +1,160 @@
+오늘의 할 일:
+
+생각해 봤는데 다음을 하면 좋을 것 같다:
+1. 원격 개발?
+	굳이?
+2. 파일 정리?
+	함
+3. vim 고치기?
+	고침
+4. vscode 설치?
+	아직 안 함
+5. 키보드 마우스 새로 구하기? (가벼운 것으로?)
+6. 전선 정리?
+
+아무튼 그러하다
+
+이제 위성 관련해서 하고, 링크들을 정리하면 좋을 것 같다.
+
+
+나중에 클린 인스톨 하면서 필요한 것들만 모아서 documentation
+documentation은 hugo로 serve --watch를 하고, 커밋, 푸쉬를 한다.
+
+
+ublox_dgnss 테스트하기.
+
+https://github.com/aussierobots/ublox_dgnss
+
+우선 colcon 설치, src 에 clone, ros2_... 디렉터리에서 빌드. 
+colcon build --symlink-install
+
+또는, 더 오래 걸리지만 최적화 옵션:
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+21:18 mr2~/ros2_ublox_test_ws🐧 colcon build --symlink-install
+Starting >>> ublox_ubx_interfaces
+Starting >>> ublox_ubx_msgs
+Starting >>> ntrip_client_node
+--- stderr: ntrip_client_node
+CMake Error at CMakeLists.txt:16 (find_package):
+  By not providing "Findrtcm_msgs.cmake" in CMAKE_MODULE_PATH this project
+  has asked CMake to find a package configuration file provided by
+  "rtcm_msgs", but CMake did not find one.
+
+  Could not find a package configuration file provided by "rtcm_msgs" with
+  any of the following names:
+
+    rtcm_msgsConfig.cmake
+    rtcm_msgs-config.cmake
+
+  Add the installation prefix of "rtcm_msgs" to CMAKE_PREFIX_PATH or set
+  "rtcm_msgs_DIR" to a directory containing one of the above files.  If
+  "rtcm_msgs" provides a separate development package or SDK, be sure it has
+  been installed.
+
+
+---
+Failed   <<< ntrip_client_node [0.88s, exited with code 1]
+Aborted  <<< ublox_ubx_interfaces [2.12s]
+Aborted  <<< ublox_ubx_msgs [3.55s]
+
+Summary: 0 packages finished [4.07s]
+  1 package failed: ntrip_client_node
+  2 packages aborted: ublox_ubx_interfaces ublox_ubx_msgs
+  1 package had stderr output: ntrip_client_node
+  3 packages not processed
+
+이는 rtcm_msg 에 기반하기 때문이다. 이것을 따로 src 설치한 뒤에 빌드해야 한다.
+
+https://github.com/tilk/rtcm_msgs.git
+
+그러고 나서 source:
+source install/setup.bash
+
+
+그런데 또 launch를 하려고 하면  다음과 같이 찡찡된다:
+21:35 mr2~/ros2_ublox_test_ws🐧 lsusb
+Bus 002 Device 004: ID 8086:0b3a Intel Corp. Intel(R) RealSense(TM) Depth Camera 435i
+Bus 002 Device 003: ID 05e3:0625 Genesys Logic, Inc. USB3.2 Hub
+Bus 002 Device 002: ID 0bda:0489 Realtek Semiconductor Corp. 4-Port USB 3.0 Hub
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 001 Device 003: ID 13d3:3549 IMC Networks Bluetooth Radio
+Bus 000 Device 007: ID 1546:01a9 U-Blox AG u-blox GNSS receiver
+Bus 000 Device 005: ID 1546:01a9 U-Blox AG u-blox GNSS receiver
+Bus 001 Device 008: ID 258a:002a SINO WEALTH Gaming KB 
+Bus 001 Device 006: ID 046d:c092 Logitech, Inc. G203 LIGHTSYNC Gaming Mouse
+Bus 001 Device 004: ID 05e3:0610 Genesys Logic, Inc. Hub
+Bus 001 Device 002: ID 0bda:5489 Realtek Semiconductor Corp. 4-Port USB 2.0 Hub
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+21:35 mr2~/ros2_ublox_test_ws🐧 ros2 run ublox_dgnss_node ublox_dgnss_node --ros-args -p CFG_USBOUTPROT_NMEA:=False
+[INFO] [1748781352.660078493] [ublox_dgnss]: starting ublox_dgnss
+[INFO] [1748781352.664877161] [ublox_dgnss]: Parameter DEVICE_SERIAL_STRING not found, will use first ublox device.
+[INFO] [1748781352.665088306] [ublox_dgnss]: Parameter FRAME_ID not found, defaulting to 'ubx' frame_id
+[INFO] [1748781352.665175189] [ublox_dgnss]: parameter supplied: CFG_USBOUTPROT_NMEA
+[ERROR] [1748781352.722304200] [ublox_dgnss]: usb init error: Error opening device: LIBUSB_ERROR_ACCESS
+[ros2run]: Segmentation fault
+
+
+이것은 libsub 기반 인터페이스에서 흔히 일어나는 오류이다.
+다음과 같이 rule을 주어서 해결을 시도할 수 있다:
+
+sudo vim /etc/udev/rules.d/99-ublox-gnss.rules
+
+룰의 내용은 다음과 같이 lsusb의 내용을 따라서:
+#UBLOX ZED-F9
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", MODE="0666", GROUP="plugdev"
+로 하면 된다. (앞에 SUBSYSTEM=="usb" 항이 필요한 지는 모르겠다)
+
+그러고 나서, 룰 업데이트:
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+실제로 적용이 되었는가? (root plugdev 확인)
+ls -l /dev/bus/usb/001/007
+ls -l /dev/bus/usb/001/005
+
+
+위를 마무리했다면 run 을 다시 하면 정상 작동하는 것이 보인다.
+ros2 topic list
+
+
+이제 NTRIP Client 를 켜서 RTCM 데이터를 받는 것을 해 본다.
+예제 실행문에 따라 다음과 같이 쓴다
+(대전, DAEJ; pianojay@naver.com, gnss2311!)
+(Port 2101 is the default for plain-text HTTP, not HTTPS.
+따라서 use_https:=false 가 맞고, 이렇게 해야 작동한다.")
+
+ros2 launch ublox_dgnss ntrip_client.launch.py \
+use_https:=false \
+host:=www.gnssdata.or.kr \
+port:=2101 \
+mountpoint:=DAEJ-RTCM30 \
+username:=pianojay@naver.com \
+password:=gnss
+
+정상 연결이 되었다면, 다음으로 값이 들어오고 있음을 확인할 수 있다:
+
+RTCM 메세지가 DAEJ에서 오고 있는가?
+ros2 topic echo /ntrip_client/rtcm
+
+ublox 가 그걸 받고 있는가?
+ros2 topic echo /rtcm
+
+ublox 가 그걸 positioning status messages 바꾸고 있는가? (RTK-Fixed/Float Status)
+ros2 topic echo /ubx_nav_pvt
+
+
+###
+
+u-center 에서 설정하기를,
+CFG-USB-SERIAL_NO_STR0 에다가 이름을 이렇게:
+EAST_GPS
+WEST_GPS
+(카메라=북쪽 기준으로)
+
+라고 했지만, 다음과 같이 설정해야 한다:
+ros2 run ublox_dgnss_node ublox_dgnss_node
+--ros-args -p DEVICE_SERIAL_STRING:=EAST_GP
+--ros-args -p DEVICE_SERIAL_STRING:=WEST_GP
+
+???

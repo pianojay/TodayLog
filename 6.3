@@ -1,0 +1,286 @@
+신나는 화요일이에요!!!!
+정말 신난다!!!
+감기는 다 나았니????? 몰라요!!!!
+
+vscode 설치 했어요.
+
+Element
+웹, macos, windows 11, ubuntu, ios/android에게 모두 적합하며,
+파일 전송, 비디오 공유가 가능한 메신저를 찾았어요
+
+오늘은 일단 ublox를 마스터할 생각이에요
+
+ublox_dgnss/ntrip_client.launch.py 내용 수정:
+default 파라미터를 교체해서, 이제 ntrip 변수 설정을 명시적으로 안 해도 됨.
+
+
+####
+
+https://github.com/aussierobots/ublox_dgnss
+
+Help me utilize this fully. What information should I provide you?
+
+I have two u-blox ZED F9P, each named as EAST_GPS and WEST_GPS.
+
+I am facing an issue with checking the "NTRIP Client - RTCM messages" part, where I should see the correct result for "ros2 topic echo /ubx_rxm_rtcm".
+
+"Did the F9 device receive and use the RTCM data?
+If you want to see if the UBX device has received and processed the RTCM data run this, after ensuring that CFG_MSGOUT_UBX_RXM_RTCM_USB is set to 1 via rqt
+
+ros2 topic echo /ubx_rxm_rtcm
+If msg_used shows 2 then the RTCM message has been used by the device.
+
+This RTCM 3 Message cheat sheet can be used to determine wha the msg_type field represents eg GPS, GLONASS, Galileo, SBAS, QZSS or BeiDou."
+
+I see that the /ntrip_client/rtcm does recieve data from the server, but cannot see any other topics. Did I forgot to set up internal parameters for ublox??
+
+
+####
+
+1. I set the CFG-MSGOUT-UBX-RXM-RTCM-USB from 0 to 1. However, this has not changed the result.
+2. ros2 launch ublox_dgnss ntrip_client.launch.py, internally, set to 'DEVICE_SERIAL_STRING':="EAST_GP" (for some reason, the name recognized is cut off).
+
+
+####
+
+I ran the following:
+
+# gets RTCM data from DAEJ server
+ros2 launch ublox_dgnss ntrip_client.launch.py
+
+# ublox node
+ros2 run ublox_dgnss_node ublox_dgnss_node \
+--ros-args -p DEVICE_SERIAL_STRING:=EAST_GP
+#--ros-args -p DEVICE_SERIAL_STRING:=WEST_GP
+
+and then I check:
+10:30 mr2~/ros2_ublox_test_ws🐧 ros2 topic list
+10:30 mr2~/ros2_ublox_test_ws🐧 ros2 topic echo /ubx_rxm_rtcm
+
+Then it works.
+
+즉, 제대로 받고 있음.
+
+####
+
+Now working with:
+"ROS2 NAVSATFIX Messages
+In addition to the UBX NAV messages shown above, NavSatFix messages can also be published on topic /fix.
+
+Note that this node relies on (and hence subscribes to) three UBX Nav messages, namely /ubx_nav_hp_pos_llh, /ubx_nav_cov, /ubx_nav_status.
+
+If the ublox device is not configured to publish these three messages, the navsatfix message will likewise not be published.
+
+/fix"
+
+
+
+###
+
+그래서 다음과 같이 u-center 로 또 수정:
+
+
+🔧 Action Plan
+✅ Step 1: Verify current messages are active
+Run:
+
+bash
+Copy
+Edit
+ros2 topic list | grep ubx_nav
+Check that these three topics are being published:
+
+/ubx_nav_hp_pos_llh
+
+/ubx_nav_cov
+
+/ubx_nav_status
+
+If any are missing, go to Step 2.
+
+🔧 Step 2: Enable UBX message output in device
+You need to make sure your F9Ps are configured to emit those UBX messages.
+
+Do this via u-center:
+
+Open each device (EAST, then WEST).
+
+In View > Messages (F9), go to:
+
+NAV -> HPPOSECEF
+
+NAV -> HPPOSELLH
+
+NAV -> COV
+
+NAV -> STATUS
+
+For each message:
+
+Right-click > Enable Message
+
+Then go to View > Configuration View (Ctrl+F9) → CFG-MSGOUT
+
+Ensure USB interface has value 1 for:
+
+UBX-NAV-HPPOSECEF
+
+UBX-NAV-HPOSLLH
+
+UBX-NAV-COV
+
+UBX-NAV-STATUS
+
+Save the configuration:
+
+Configuration View → CFG-CFG
+
+Save current settings to Flash + BBR + RAM
+
+
+그러고 나서 한번 껐다 켜면 그때부터 작동을 똑바로 하는 듯 함...
+그러나, 이상하게 /fix 가 publish 되지 않는 것을 확인할 수 있음.
+
+그런데 (설명에 따르면) 필요한 다른 것들은 정상적으로 publish 되고 있으므로,
+지금은 그냥 넘어가도록 하자.
+
+###
+
+우리에게는 gps 장치 두 개가 동시에 연결된 상태로 운용이 되고 있다.
+이에 따라, 다음과 같은 구조를 염두에 둔다:
+
+1. ntrip 에서 RTCM 데이터를 받는 노드가 있다
+2. 각각의 ublox 를 위한 dgnss 노드가 있다. (iSerial 이름으로 구분됨)
+3. 각각의 노드는 (현재 /fix 에 상응하는) 토픽을 들고 있다. 그런데 이름이 겹치고 있다.
+
+우선 다음과 같은 메세지 꼴을 보면:
+
+
+11:55 mr2~/ros2_ublox_test_ws🐧 ros2 topic echo /ubx_nav_cov --once
+header:
+  stamp:
+    sec: 1748919361
+    nanosec: 295240664
+  frame_id: ubx
+itow: 183379000
+version: 0
+pos_cor_valid: true
+vel_cor_valid: true
+pos_cov_nn: 21.47189712524414
+pos_cov_ne: 2.8530120849609375
+pos_cov_nd: 13.394139289855957
+pos_cov_ee: 13.59096622467041
+pos_cov_ed: 16.473709106445312
+pos_cov_dd: 84.42762756347656
+vel_cov_nn: 0.29907482862472534
+vel_cov_ne: 0.025172263383865356
+vel_cov_nd: 0.0861324891448021
+vel_cov_ee: 0.14256666600704193
+vel_cov_ed: 0.07044513523578644
+vel_cov_dd: 0.294029
+---
+
+frame_id: 가 있다.
+따라서, device 이름 외에 frame_id 도 함께 지정해 주면 된다.
+device 랑 frame 이랑 이름을 똑같이 지정하면 편하겠지?
+
+-p FRAME_ID:=east
+-p FRAME_ID:=west
+
+그러면, 예를 들어:
+header:
+  stamp:
+    sec: 1748921251
+    nanosec: 371345769
+  frame_id: west
+
+
+아니면, namespace 를 아예 다르게 할 수도 있다.
+
+
+###
+
+아 그리고 WEST_GPS 쪽 NMEA 메세지 다 끔.
+(CFG-MSGOUT-NMEA_ID_XXX_USB); GGA, GSA, GSV, RMC
+
+아 이게 전부가 아니네. 귀찮아라.
+(아무튼 EAST_GPS 와 WEST_GPS 노드 각각을 실행할 때 뜨는 로그가 다를 것임)
+EAST는 로그가 없을 것
+
+
+###
+
+
+그러면, NavSatFix 의 /fix 가 퍼블리시 되지 않는 문제를 제외하고 나머지 requirement는 작동이 확인됨.
+
+
+관련 내용 발췌:
+
+Fixed Base and Rover
+
+base: rtcm 데이터 송출
+The base is setup to perform the survey-in procedure and, once finished, emit RTCM messages.
+
+rover: rtcm 데이터 수신
+
+Example launch files are provided for this use case.
+Run ublox_fb+r_base.launch.py for the fixed base
+and ublox_fb+r_rover.launch.py for the moving rover.
+
+
+###
+
+
+NavSatFix /fix 문제 해결 (?):
+
+12:54 mr2~/ros2_ublox_test_ws🐧 ros2 launch ublox_dgnss ublox_rover_hpposllh_navsatfix.launch.py
+
+이걸로 하면 나옴
+
+ros2 topic list
+ros2 topic echo /fix --once
+
+야호...
+
+그러니까 어떤 런치 파일은 특히 그런 것을 지원한다.
+아마 우리 입맛에 맞게 나중에 하나 만들어야 할 듯.
+
+
+###
+
+할 일: terminator 설치
+
+배터리 용량 재는 소프트웨어 (bms node?) -> 확인. 소프트웨어는 아니고 그냥 보드
+
+###
+
+1. UbloxNavSatHpFixNode 에 대해 탐구해 보자
+
+2. 왜 이렇게 공분산, h_acc, v_acc 이 크지??
+-> 외부 (운동장) 에서도 정확도가 그렇게 높지 않음.
+-> RTK 작동 하지 않는 오류 발견.
+
+###
+
+ChatGPT 와의 여러 시도 끝에 일단 DAEJ 쪽의 문제인 것으로 확인됨.
+더 구체적으로 설명하면, 레거시 RTCM 정보를 주는 중.
+이에 따라, RTK를 할 수 없음.
+또는 Survey-in 을 하지 않음.
+
+SEJN으로 바꿔볼 수 있음.
+
+SEJN-RTCM23
+
+SEJN-RTCM31
+
+SEJN-RTCM32
+
+SEJN-BINEX
+
+###
+
+
+pygpsclient로 초기화했더니 문제가 해결이 되었다.
+
+rosdep 라는 친구가 있다. 어딘가에 필요로 하는 것을 설치할 수 있도록 한다.
+ros rtcm bla.

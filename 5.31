@@ -1,0 +1,49 @@
+mr2@mr2-jetson:~$ cat TodayLog/5_31_Jaeuk
+오늘 한 것들을 적어요:
+1. 리얼센스 재설치...
+
+
+일단, 방문하는 웹사이트는 크로뮴 북마크에 저장하도록 했습니다.
+예를 들어, 오늘 분은 5.31 북마크 폴더 안에 저장합니다.
+(는 거짓말)
+
+우선, realasense 카메라를 ros 에서 쓰는 게 목표이다.
+https://github.com/IntelRealSense/realsense-ros
+
+위는 아래에 기반 (jetson 용):
+https://github.com/IntelRealSense/librealsense/blob/master/doc/installation_jetson.md
+
+위는 아래에 기반 (mipi 드라이브?):
+https://github.com/IntelRealSense/realsense_mipi_platform_driver
+
+위에 대한 설치 과정에 대한 git proxy troubleshooting:
+https://github.com/IntelRealSense/realsense_mipi_platform_driver/issues/215
+"Another workaround is to substitute git: links with https: links.
+git config --global url."https://nv-tegra.nvidia.com/".insteadOf "git://nv-tegra.nvidia.com/"
+git config --global url."https://github.com/".insteadOf "git@github.com/"
+"
+
+그리고 하다 보면 git 커밋 주체가 누구냐고 물어서 다음으로 설정함:
+
+git config --global user.email "mr2@mr2-jetson"
+git config --global user.name "mr2-jetson"
+
+mipi troubleshooting (missing parameter?):
+https://github.com/IntelRealSense/realsense_mipi_platform_driver/pull/151
+
+!
+
+그런데 필요한 커널 패치(인스톨, 컴파일, 빌드, 패치)를 하는 것을 자동화하는 방법이 있다. 다음을 참고하면 된다.
+https://github.com/jetsonhacks/jetson-orin-librealsense (인스톨, 패치(<-아래 프로그램으로 빌드 했음을 전제로 함))
+https://github.com/jetsonhacks/jetson-orin-kernel-builder?tab=readme-ov-file (빌드)
+
+위의 착한 해커씨를 따르면 작동하는 것 같다. 위의 realsense_mipi_platform_driver 는 지워도 되는 것 같다...
+(그냥 착한 해커씨를 따라하면 작동하더라.)
+
+그래서 설치가 제대로 된 것인지 확인하려면 다음을 한다:
+realsense-viewer
+
+
+###
+
+아 참고로 큰 배터리 하나로 최고 성능 발휘 시 17시간 쓸 수 있다.

@@ -1,0 +1,13 @@
+Openvins 설치
+
+1. dependency 로 opencv 가 필요함.
+근데, 우분투 / 파이썬 기본 opencv 바이너리는 젯슨 가속을 지원하지 않고
+cpu로만 돌아간다.
+
+그래서 젯슨용으로 opencv를 빌드해줘야함.
+
+git clone https://github.com/Qengineering/Install-OpenCV-Jetson-Nano.git
+
+하지만 실패
+
+https://github.com/rpng/open_vins/issues/421
