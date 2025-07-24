@@ -1,0 +1,254 @@
+# Part I: Installation
+
+0. Install jtop, rustdesk, tailscale, ncdu etc
+
+1. Install ROS2 & ROS wrapper for realsense,
+following:
+    https://github.com/IntelRealSense/realsense-ros
+for kernel (module) building, thoroughly follow:
+    https://github.com/jetsonhacks/jetson-orin-librealsense
+    XXX Don't forget to check the module flags with GUI!
+```
+# XXX Since we are using realsense, for later ROS1 bag, we have to stitch the imu output format:
+ros2 run realsense2_camera realsense2_camera_node --ros-args -p unite_imu_method:=1
+```
+
+2. Install colcon & other prerequisits for OpenVINS
+sudo apt install python3-colcon-common-extensions
+sudo apt-get update
+sudo apt-get install libeigen3-dev libboost-all-dev libceres-dev
+# sudo apt-get upgrade
+
+3. Build OpenVINS: Clone inside src and then colcon
+
+####
+TIP: NEVER disturb the computer while building stuffs. (RAM issue)
+Or, use single core (--parallel-workers 1) or select (--packages-select abcdef)
+
+ex:
+colcon build --parallel-workers 1 --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+
+And, adding swap:
+```
+# 기존 스왑 제거
+sudo swapoff /swapfile
+sudo rm /swapfile
+
+# 새 스왑 생성 (4GB)
+sudo fallocate -l 8G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# /etc/fstab에 등록 (재부팅 후 유지)
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+명경민의 해법: build 시 make -j4 (4개 병렬화) 하면 문제 완화
+####
+
+
+
+4. clone Kalibr (ROS; used with noetic Docker) in src:
+    XXX Install Docker Engine v27!!!
+    XXX clone the FIXED VERSION!!! -> https://github.com/URC-kaist/kalibr.git
+        Fixed `nano /catkin_ws/src/kalibr/aslam_offline_calibration/kalibr/python/kalibr_calibrate_cameras` import order (cv2, cv_bridge)
+    XXX CHANGE base image!!! src/kalibr/Dockerfile_ros1_20_04:
+```
+#FROM osrf/ros:noetic-desktop-full
+FROM arm64v8/ros:noetic    
+```
+
+With this, the initial setup installation is complete.
+
+
+
+# Part II: Calibration
+
+5. Collect Data: Camera, IMU, IMU-Camera
+Here we get ROS2 Bag folder.
+
+
+a. IMU recording: follow https://github.com/ori-drs/allan_variance_ros
+    ros2 topic type: sensor_msgs/msg/Imu -> /camera/camera/imu
+        /camera/camera/accel/sample, /camera/camera/gyro/sample
+    ex:
+```
+ros2 bag record -o imu_bag_a1 /camera/camera/imu
+# imu_bag_a1/ is created in pwd
+```
+    3~20 Hours recommended, longer the better. 10 hr gives ~4.3GB (4.0GiB)
+
+
+b. CAM recording:
+    ros2 topic type: sensor_msgs/msg/Image
+        /camera/camera/color/image_raw
+    ex:
+```
+ros2 bag record -o cam_bag_a1 /camera/camera/color/image_raw
+```
+
+
+c. IMUCAM recording:
+```
+ros2 bag record -o imucam_bag_a1 /camera/camera/color/image_raw /camera/camera/imu
+```
+이론적으로는, IMUCAM 튜닝은 CAM 정보도 포함되니까 한 번에 할 수는 있다... 위의 bag-converter 옵션 사용.
+
+
+
+6. Conversion
+    Use rosbags-convert to convert ROS2 bag folder to ROS1 bag file, ex:
+```
+pip3 install rosbags>=0.9.12 -U
+rosbags-convert --src imu_bag_a1 --dst imu_a1.bag
+rosbags-convert --src imucam_bag_a1 --dst imucam_a1.bag --exclude-topic /camera/camera/imu
+rosbags-convert --src imucam_bag_a1 --dst imucam_a1.bag
+```
+    Could take a bit more time.
+
+
+
+
+
+7. Calculation: Camera, IMU, IMU-Camera
+IMU uses allan_variance_ros, and anything with camera uses Kalibr,
+where both only support ROS, not ROS2. So we use Docker file came with Kalibr.
+You MUST follow the XXX instructions marked at step 4.
+
+Run the Docker, mounting the converted ros bag, ex:
+```
+FOLDER=$(pwd) # probably like /ros2_ws/src
+xhost +local:root
+sudo docker run -it -e "DISPLAY" -e "QT_X11_NO_MITSHM=1" \
+    -v "/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+    -v "$FOLDER:/data" kalibr # mounted on /data
+```
+Now you are in the Docker!
+
+
+a. IMU with allan_variance_ros
+Start from cloning allan_variance_ros in src. Install dependencies, build, run.
+ex:
+```
+cd /catkin_ws/src
+
+
+# for IMU
+git clone https://github.com/ori-drs/allan_variance_ros.git
+cd ..
+apt-get update
+apt-get install ros-noetic-tf2-geometry-msgs libyaml-cpp-dev -y
+catkin build allan_variance_ros -DCMAKE_BUILD_TYPE=Release
+
+
+apt-get install ros-noetic-cv-bridge -y # No module named 'cv_bridge'
+source /catkin_ws/devel/setup.bash
+roscore
+
+# Next one takes about 30 min for 10 hr bag. Do something more important in a mean time.
+rosrun allan_variance_ros cookbag.py --input /data/imu_a1.bag --output /data/imu_a1_cooked.bag
+
+rosrun allan_variance_ros allan_variance /data/imu_bag /data/imu_config.yaml
+
+rosrun allan_variance_ros analysis.py --data /data/imu_bag/allan_variance.csv --config /data/imu_config.yaml
+
+mv acceleration.png /data/imu_bag
+mv gyro.png /data/imu_bag
+mv imu.yaml /data/imu_bag
+```
+
+"Typically these noise values should be inflated by maybe 10-20x their values to take into account unmodelled errors"
+Q. What is "unmodelled"? How do we check this from the Allan variance fitting graph?
+A. Unmodelled, as in, as we only model white noise and bias (random rate),
+we fit the curve in a U-shape, which can differ from the measured curve.
+In that, we need to make sure that the fitted model represents the measured noise,
+and the parameters for such, so we must adjust the curve.
+
+XXX Troubleshooting disagreeing bias (underfitting):
+It is recorded that the bias for accelerometer x, y, z does not agree well. (x>y>>z)
+Basically, the model is too overconfident of noise, ignoring massive problem.
+- Solve: Maybe adjust bias parameter to compensate the disagreement?
+
+- Hypothesis: Why does this happen?
+There could be many reasons (gravity, fridge, temperature (<- unlikely for disagreement))...
+We suspect hardware asymmetry, because it was indifferent to measurement orientation
+
+
+
+b. CAM with Kalibr + april_6x6.yaml
+```
+source /catkin_ws/devel/setup.bash
+roscore
+rosrun kalibr kalibr_calibrate_cameras \
+    --bag /data/cam_a1.bag --target /data/april_6x6.yaml \
+    --models pinhole-radtan \
+    --topics /camera/camera/color/image_raw \
+    --bag-freq 10.0
+```
+
+
+
+c. IMUCAM with Kalibr + april_6x6.yaml + https://github.com/ethz-asl/kalibr/wiki/yaml-formats
+```
+source devel/setup.bash
+roscore
+rosrun kalibr kalibr_calibrate_imu_camera \
+    --bag /data/imucam_bag/imucam_a2.bag --target /data/imucam_bag/april_6x6.yaml \
+    --imu /data/imu_bag/imu_a1_analysis/imu.yaml \
+    --imu-models calibrated \
+    --cam /data/cam_bag/cam_a2-camchain.yaml # cf. https://github.com/ethz-asl/kalibr/issues/445
+
+```
+
+
+
+
+
+# Part III: OpenVINS: https://youtu.be/rBT5O5TEOV4?si=tEv_HrZiVMn4GQ8m&t=2106
+Should also build using install/setup.bash
+
+a. configuration
+We copy rs_d455 (realsense d455) config in /open_vins/config: src/rs_d435i,
+and modify/paste:
+1. camchain from imucam_bag to kalibr_imucam_chain.yaml (add extra indentation for items of T_cam_imu)
+2. imu.yaml from imu_bag to kalbr_imu_chain.yaml (add matching indentation)
+and also set "use_stereo: false" in estimator_config.yaml
+
+
+b. Kronk, do the thing.
+
+cd ~/ros2_ws
+ros2 run realsense2_camera realsense2_camera_node --ros-args -p unite_imu_method:=1
+
+
+rviz2 -d src/open_vins/ov_msckf/launch/display_ros2.rviz
+
+source install/setup.bash
+ros2 launch ov_msckf subscribe.launch.py \
+config_path:=/home/mr2/ros2_ws/src/rs_d435i/estimator_config.yaml max_cameras:=1
+
+# https://github.com/rpng/open_vins/issues/388
+
+
+
+
+# TODO:
+learn rosdep
+  
+
+
+
+nano /catkin_ws/src/kalibr/aslam_offline_calibration/kalibr/python/kalibr_camera_validator
+이 친구도 cv2를 cv_bridge 위로 올려야 함
+
+
+
+https://github.com/rpng/open_vins/issues/409
+
+https://github.com/IntelRealSense/realsense-ros/issues/1449
+
+
+rs-enumerate-devices
+
