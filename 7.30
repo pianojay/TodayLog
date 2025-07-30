@@ -1,0 +1,67 @@
+I just woke up.
+Let's recap the components:
+
+The tf defines how to transform inter-frame. In that, frames are only names and inherently meaningless on its own; they make sense of each other because there is tf.
+
+So there is a coordinate inside a defined frame, and tf between frames, so that we can transform coordinates for compatibility, in this case, ekf.
+
+The names of the frames follow convention, where you shall choose to use map for global frame (so perhaps ground truth), odom for local estimation, and base_link used for defining robot components (imu, gps rx etc).
+
+The goal of rover_localization is to incorporate imu and gps data by:
+
+1. ekf_node fuses sensor data in the odom frame and produces a continuous, drift-prone pose.
+
+2. navsat_transform_node aligns that pose with GNSS in the map frame and computes a static or slowly-varying map → odom transform.
+
+So the final tf tree becomes:
+map
+└── odom  ← (computed by navsat_transform_node)
+     └── base_link  ← (computed by ekf)
+         ├── imu_link  ← static
+         └── gps_link  ← static
+
+(tf: A → B  ⇒  Pose of B in frame A)
+
+
+Then as result:
+    - The robot's global pose is: map → base_link (map -> odom -> base_link)
+    - The robot's control/planning pose (usually): odom → base_link
+
+
+Now we are familiar with the tf and frames, let's recap again with the data flow, for instance:
+
+1. from imu_link and gps_link, we get /imu/data and /gps/data, where tf: base_link -> imu_link and tf: base_link -> gps_link is given (i.e., robot design)
+
+2. rover_localization transforms sensor input:
+a. ekf_node estimates odom->base_link using imu
+b. navsat_transform_node estimates map->odom using fix (then why does it need imu? -> for orientation)
+c. Then now we can deduce map->base_link, the corrected global pose, and use it elsewhere. (The representation of where we are "on earth")
+
+
+
+
+
+🟦 Dynamic Runtime Flow
+
+    IMU publishes /imu/data in imu_link
+        Orientation + acceleration + gyro
+
+    GNSS publishes /gps/fix in gps_link
+        Latitude, longitude, altitude
+
+    Static tf transforms both into base_link
+
+    ekf_node:
+        Receives transformed IMU data
+        Integrates motion
+        Publishes:
+            odom → base_link (tf)
+            /odometry/filtered (pose in odom)
+
+    navsat_transform_node:
+        Projects GNSS fix to Cartesian (map) frame
+        Uses IMU + tf + EKF pose to compute map → odom
+
+    Then:
+        Compose: map → base_link = map → odom × odom → base_link
+        This is your global pose

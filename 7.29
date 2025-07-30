@@ -1,0 +1,41 @@
+오늘은 localization (Estimator)을 할 거에요.
+재료는 robot_localization.
+
+그냥 apt 설치를 하려고 함. 뭐 건드릴 것 전혀 없어서...
+sudo apt install ros-humble-robot-localization
+
+
+https://docs.ros.org/en/noetic/api/robot_localization/html/state_estimation_nodes.html
+
+mr2_rover_auto
+
+
+그러면 다 모아서:
+
+
+IMU, (NTRIP), GNSS, estimator:
+
+ros2 launch iahrs_driver iahrs_driver.py
+
+ros2 launch ublox_dgnss ntrip_client.launch.py \
+use_https:=false host:=www.gnssdata.or.kr port:=2101 mountpoint:=DAEJ-RTCM30 \
+username:=pianojay@naver.com password:=gnss
+
+ros2 launch ublox_dgnss ublox_fb+r_rover.launch.py \
+device_serial_string:=NorthRx frame_id:=gps_north_link
+
+ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_RXM_RTCM_USB 1
+ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_NAV_STATUS_USB 1
+
+ros2 launch mr2_rover_auto estimator.launch.py
+
+
+
+
+ros2 run tf2_tools view_frames
+
+
+
+
+https://github.com/URC-kaist/ros2_ws/tree/2026/src
+

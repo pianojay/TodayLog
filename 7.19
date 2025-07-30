@@ -11,6 +11,10 @@ for kernel (module) building, thoroughly follow:
 ```
 # XXX Since we are using realsense, for later ROS1 bag, we have to stitch the imu output format:
 ros2 run realsense2_camera realsense2_camera_node --ros-args -p unite_imu_method:=1
+
+Checking publishing frequency:
+ros2 topic hz /camera/camera/color/image_raw
+ros2 topic hz /camera/camera/imu
 ```
 
 2. Install colcon & other prerequisits for OpenVINS
@@ -102,6 +106,10 @@ ros2 bag record -o imucam_bag_a1 /camera/camera/color/image_raw /camera/camera/i
     Use rosbags-convert to convert ROS2 bag folder to ROS1 bag file, ex:
 ```
 pip3 install rosbags>=0.9.12 -U
+
+ros2 run realsense2_camera realsense2_camera_node --ros-args -p unite_imu_method:=1
+rviz2
+
 rosbags-convert --src imu_bag_a1 --dst imu_a1.bag
 rosbags-convert --src imucam_bag_a1 --dst imucam_a1.bag --exclude-topic /camera/camera/imu
 rosbags-convert --src imucam_bag_a1 --dst imucam_a1.bag
@@ -135,23 +143,23 @@ ex:
 cd /catkin_ws/src
 
 
-# for IMU
+# for allan_variance_ros
 git clone https://github.com/ori-drs/allan_variance_ros.git
 cd ..
 apt-get update
 apt-get install ros-noetic-tf2-geometry-msgs libyaml-cpp-dev -y
 catkin build allan_variance_ros -DCMAKE_BUILD_TYPE=Release
 
-
+# for Kalibr
 apt-get install ros-noetic-cv-bridge -y # No module named 'cv_bridge'
 source /catkin_ws/devel/setup.bash
 roscore
 
 # Next one takes about 30 min for 10 hr bag. Do something more important in a mean time.
 rosrun allan_variance_ros cookbag.py --input /data/imu_a1.bag --output /data/imu_a1_cooked.bag
-
+# Calculate Allan variance, CSV comes out:
 rosrun allan_variance_ros allan_variance /data/imu_bag /data/imu_config.yaml
-
+# From CSV, fit the curve, get the parameters, and visualize:
 rosrun allan_variance_ros analysis.py --data /data/imu_bag/allan_variance.csv --config /data/imu_config.yaml
 
 mv acceleration.png /data/imu_bag
@@ -169,12 +177,16 @@ and the parameters for such, so we must adjust the curve.
 XXX Troubleshooting disagreeing bias (underfitting):
 It is recorded that the bias for accelerometer x, y, z does not agree well. (x>y>>z)
 Basically, the model is too overconfident of noise, ignoring massive problem.
-- Solve: Maybe adjust bias parameter to compensate the disagreement?
+- Solve: Adjust bias parameter to compensate the disagreement.
+-> Would be awesome if we can optimize this...
 
 - Hypothesis: Why does this happen?
 There could be many reasons (gravity, fridge, temperature (<- unlikely for disagreement))...
-We suspect hardware asymmetry, because it was indifferent to measurement orientation
+We suspect hardware asymmetry, because it was indifferent to measurement orientation.
+Anyway, it has to be solved.
 
+
+Here we need a tool to see the fitted plots
 
 
 b. CAM with Kalibr + april_6x6.yaml
@@ -188,18 +200,17 @@ rosrun kalibr kalibr_calibrate_cameras \
     --bag-freq 10.0
 ```
 
-
+cl
 
 c. IMUCAM with Kalibr + april_6x6.yaml + https://github.com/ethz-asl/kalibr/wiki/yaml-formats
 ```
 source devel/setup.bash
 roscore
 rosrun kalibr kalibr_calibrate_imu_camera \
-    --bag /data/imucam_bag/imucam_a2.bag --target /data/imucam_bag/april_6x6.yaml \
-    --imu /data/imu_bag/imu_a1_analysis/imu.yaml \
+    --bag /data/imucam_bag/imucam_a3.bag --target /data/imucam_bag/april_6x6.yaml \
+    --imu /data/imu_bag/imu_a1_analysis/imu_inflated.yaml \
     --imu-models calibrated \
     --cam /data/cam_bag/cam_a2-camchain.yaml # cf. https://github.com/ethz-asl/kalibr/issues/445
-
 ```
 
 
@@ -209,7 +220,7 @@ rosrun kalibr kalibr_calibrate_imu_camera \
 # Part III: OpenVINS: https://youtu.be/rBT5O5TEOV4?si=tEv_HrZiVMn4GQ8m&t=2106
 Should also build using install/setup.bash
 
-a. configuration
+a. XXX configuration
 We copy rs_d455 (realsense d455) config in /open_vins/config: src/rs_d435i,
 and modify/paste:
 1. camchain from imucam_bag to kalibr_imucam_chain.yaml (add extra indentation for items of T_cam_imu)
@@ -223,7 +234,7 @@ cd ~/ros2_ws
 ros2 run realsense2_camera realsense2_camera_node --ros-args -p unite_imu_method:=1
 
 
-rviz2 -d src/open_vins/ov_msckf/launch/display_ros2.rviz
+rviz2 -d ~/ros2_ws/src/open_vins/ov_msckf/launch/display_ros2.rviz
 
 source install/setup.bash
 ros2 launch ov_msckf subscribe.launch.py \
@@ -236,19 +247,12 @@ config_path:=/home/mr2/ros2_ws/src/rs_d435i/estimator_config.yaml max_cameras:=1
 
 # TODO:
 learn rosdep
-  
-
-
 
 nano /catkin_ws/src/kalibr/aslam_offline_calibration/kalibr/python/kalibr_camera_validator
 이 친구도 cv2를 cv_bridge 위로 올려야 함
-
-
 
 https://github.com/rpng/open_vins/issues/409
 
 https://github.com/IntelRealSense/realsense-ros/issues/1449
 
-
 rs-enumerate-devices
-

@@ -1,0 +1,160 @@
+이전의 쓰레기는 old_ros2_ws 로 옮김.
+
+오늘은 iAHRS IMU를 개통할 거에요.
+
+vscode 설치 (그냥)
+
+driver 설치 (나는 silicon labs 에서 다운로드, make 함) (그런데 이미 깔려있었던 것도 같다. 뭐 알아서 확인)
+minicom 설치 -> serial 통신 확인
+    설정은 hardware flow control 을 yes -> no 로 바꾸는 것 외에는 그대로 둬도 무관.
+
+
+https://github.com/wookbin/iahrs_driver_ros2
+그 다음에 iarhs ros2를 친절히 따라하면 됩니다. (interface 빌드 후 driver 빌드)
+/tf 확인, Rviz2에서 fixed frame을 map 에서 base_link로 설정.
+
+ros2 launch iahrs_driver iahrs_driver.py
+
+####
+
+이제 RTK GNSS를 할 차례에요.
+
+https://github.com/aussierobots/ublox_dgnss 
+ublox_dgnss 를 설치하는데, 여기는  rtcm_msg에 의존한다.
+https://github.com/tilk/rtcm_msgs
+
+
+colcon list -> 빌드할 수 있는 것 목록
+colcon build --packages-select ???? -> 선택 빌드 (원한다면)
+
+####
+USB 접근 규칙 작성:
+sudo vim /etc/udev/rules.d/99-ublox-gnss.rules
+
+#UBLOX ZED-F9
+ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", MODE="0666", GROUP="plugdev"
+
+적용:
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+권한관련:
+sudo usermod -aG plugdev $USER
+sudo usermod -a -G dialout $USER
+newgrp dialout
+
+ls -l /dev/serial/by-id/
+
+왜 usb가 문제인가!!!
+
+
+
+####
+
+뭘 할 수 있니?
+ros2 run <package_name> --print
+ros2 pkg prefix <package_name>
+
+
+🔎 Summary Table
+Purpose	Command
+List runnables	ros2 run <pkg> --print
+Run executable	ros2 run <pkg> <exec>
+Locate package	ros2 pkg prefix <pkg>
+List launch files	find $(ros2 pkg prefix <pkg>)/share/<pkg>/launch -name "*.launch.py"
+Run launch file	ros2 launch <pkg> <file.launch.py>
+
+
+음 아무튼.
+
+
+Device Identification Parameters
+https://github.com/aussierobots/ublox_dgnss?tab=readme-ov-file#device-identification-parameters
+
+launch 파라미터 DEVICE_SERIAL_STRING: CFG-USB-SERIAL_NO_STRx -> 이게 이름 역할을 한다.
+
+
+
+ublox zed f9p 를 config (flash) 하기 위해서는 공식 도구인 u-center (windows) 를 이용할 수도 있다.
+그런데 Ubuntu에서 쓰기 위해서 대용을 찾아볼 수 있다. -> PyGPSClient를 쓴다.
+
+python3 -m pip install --upgrade pygpsclient
+pygpsclient
+
+https://github.com/semuconsulting/PyGPSClient#ubxconfig
+
+여기서 factory reset 이나 ntrip 클라이언트 접속을 해볼 수도 있다.
+그런데 어차피 잘 안되니까 윈도우에 u-center를 쓰자. (cfg get set)
+
+If you want to see if the UBX device has received and processed the RTCM data run this, after ensuring that CFG_MSGOUT_UBX_RXM_RTCM_USB is set to 1 via rqt
+
+Ensure CFG_MSGOUT_UBX_NAV_STATUS_USB is set to 1. It is lower priority message but can be used to determine what type of GPS fix and the type of differential error correction that has been supplied.
+
+
+<NTRIP 클라이언트>: RTCM 정보를 외부에서 받고 싶다면 이걸 사용한다. (www.gnssdata.or.kr)
+
+ros2 launch ublox_dgnss ntrip_client.launch.py \
+use_https:=false host:=www.gnssdata.or.kr port:=2101 mountpoint:=DAEJ-RTCM30 \
+username:=pianojay@naver.com password:=gnss
+
+이제 <로버와 베이스>를 시뮬레이션 해야 한다.
+
+tree src/ublox_dgnss/ublox_dgnss:
+src/ublox_dgnss/ublox_dgnss
+├── CHANGELOG.rst
+├── CMakeLists.txt
+├── launch
+│   ├── ntrip_client.launch.py						-> DAEJ-RTCM30 에서 ntrip 받기
+│   ├── ublox_fb+r_base.launch.py					-> fixed base; base
+│   ├── ublox_fb+r_rover.launch.py					-> fixed base; rover
+│   ├── ublox_mb+r_base.launch.py					-> moving base; base
+│   ├── ublox_mb+r_rover.launch.py					-> moving base; rover
+│   ├── ublox_rover_hpposecef.launch.py				-> rover; ECEF (XYZ)좌표계
+│   ├── ublox_rover_hpposllh.launch.py				-> rover
+│   ├── ublox_rover_hpposllh_navsatfix.launch.py	-> rover; navsatfix format
+│   └── ublox_rover_hpposllh_satellite.launch.py	-> rover; + satellite info
+└── package.xml
+
+
+우리는 다음과 같이:
+
+
+ros2 launch ublox_dgnss ublox_fb+r_base.launch.py \
+device_serial_string:=SouthRx frame_id:=SouthFrame
+
+ros2 launch ublox_dgnss ublox_fb+r_rover.launch.py \
+device_serial_string:=NorthRx frame_id:=NorthFrame
+
+ros2 launch ublox_dgnss ublox_fb+r_rover.launch.py \
+device_serial_string:=SouthRx frame_id:=SouthFrame
+
+--show-args
+
+ros2 node list
+ros2 param set /base/ublox_dgnss CFG_MSGOUT_UBX_RXM_RTCM_USB 1
+ros2 param set /base/ublox_dgnss CFG_MSGOUT_UBX_NAV_STATUS_USB 1
+ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_RXM_RTCM_USB 1
+ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_NAV_STATUS_USB 1
+
+
+ros2 topic echo /rover/fix -> 이게 존재해야 함
+ros2 topic echo /rover/ubx_rxm_rtcm -> 이게 떠야 함.
+ros2 topic echo /rover/ubx_nav_status
+ros2 topic echo /rover/ubx_nav_hp_pos_llh
+
+역시 실내는 잘 안 되는 구나
+
+USB가 잘 안된다면 최신 버전으로 다시 클론해 보자.
+
+
+나중에: base에 두 개 있으므로 launch param 에 namespace 변경 (rover_n / rover_s)
+
+
+서버 구축하기:
+
+
+
+RPi를 base server 로 한다.
+
+
+
