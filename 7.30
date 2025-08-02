@@ -65,3 +65,35 @@ c. Then now we can deduce map->base_link, the corrected global pose, and use it 
     Then:
         Compose: map → base_link = map → odom × odom → base_link
         This is your global pose
+
+
+
+
+
+
+
+
+
+####
+할 일:
+1. IMU 확인하기 -> /imu/data 토픽이 뭔가 원하는 정보가 없는 것 같다.
+2. custom ublox_dgnss launch file 만들기 (제대로 config) + base station을 위한 ublox 찾기 -> subscribe를 원하는 대로 하도록...
+3. gazebo 에서 robot_localization 및 mr2_rover_auto estimator.launch.py 작동 확인 (즉 config 문제 해결) (아오)
+
+These are my current TODO list:
+1. Check and adjust the /imu/data publishing: need to make sure it gives appropriate magnetic bearing angle and absolute yaw orientation (however the orientation is in quaternion)
+2. Check gps node config (detail omitted)
+3. Verify every estimator.launch.py configurations
+
+Because there is a problem with input (data format, RTK etc.) it is hard to check if the estimator is wrong.
+
+
+일단 IMU 부터: orientation, gyro, lin acc
+1. orientation: magnetism -> absolute yaw 필요.
+2. lin acc: gravity 제거 (NOTE you must tune the IMU gravity in that location!)
+3. gyro는 그냥 쓰면 됨.
+
+
+
+
+

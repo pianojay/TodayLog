@@ -21,11 +21,13 @@ ros2 launch ublox_dgnss ntrip_client.launch.py \
 use_https:=false host:=www.gnssdata.or.kr port:=2101 mountpoint:=DAEJ-RTCM30 \
 username:=pianojay@naver.com password:=gnss
 
-ros2 launch ublox_dgnss ublox_fb+r_rover.launch.py \
-device_serial_string:=NorthRx frame_id:=gps_north_link
+또는
 
-ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_RXM_RTCM_USB 1
-ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_NAV_STATUS_USB 1
+ros2 launch ublox_dgnss ublox_fb+r_base.launch.py \
+device_serial_string:=SouthRx frame_id:=gps_station_link namespace:=station
+
+ros2 launch ublox_dgnss ublox_fb+r_rover.launch.py \
+device_serial_string:=NorthRx namespace:=rover_north frame_id:=gps_north_link
 
 ros2 launch mr2_rover_auto estimator.launch.py
 

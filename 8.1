@@ -1,0 +1,29 @@
+tailscale status -> check other devices on account
+tailscale을 rpi에 깔았어요! 또한 jetson 과 rpi 간의 tailsnet 통신이 가능해져요!!
+
+tmux를 rpi와 jetson 에 모두 깔았어요! 또한 여러 탭을 요구하는 ssh 작업이 수월해질 거에요!
+https://gist.github.com/MohamedAlaa/2961058
+
+한 가지 걱정되는 점이 있다면 rpi의 microSD를 믿을 수 없다는 거에요. 아마 소모품으로 생각해야 할 겁니다.
+여기서 제일 중요한 점은 어느 날 맛이 가는 경우가 클 거라는 거에요. microSD는 새로 사면 되겠지만 데이터는 날라가니
+
+
+아무튼 새로 colcon build 할 때에 libcurl_vendor 관련 오류가 뜰 것이다.
+그러면
+sudo apt install ros-humble-libcurl-vendor
+
+cd ~/ros2_base_ws
+sudo apt install python3-rosdep2
+rosdep update
+rosdep install --from-paths src --ignore-src -r -y
+
+
+####
+
+두 개의 machine 끼리 ros2 topic을 주고받게 하기
+
+나는 그냥 tailscale ip를 쓸 것이야.
+
+https://www.danaukes.com/notebook/ros2/30-configuring-ros-over-tailscale/
+
+이 문서를 따라하면 된다. 그러나, .bashrc export 부분에서 path 등이 잘못 적혀있으므로 이건 알아서 고쳐놓도록 한다.

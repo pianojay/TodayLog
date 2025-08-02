@@ -118,24 +118,24 @@ src/ublox_dgnss/ublox_dgnss
 
 우리는 다음과 같이:
 
-
 ros2 launch ublox_dgnss ublox_fb+r_base.launch.py \
-device_serial_string:=SouthRx frame_id:=SouthFrame
+device_serial_string:=StationRx frame_id:=gps_station_link namespace:=station
 
 ros2 launch ublox_dgnss ublox_fb+r_rover.launch.py \
-device_serial_string:=NorthRx frame_id:=NorthFrame
+device_serial_string:=NorthRx namespace:=rover_north frame_id:=gps_north_link
 
 ros2 launch ublox_dgnss ublox_fb+r_rover.launch.py \
-device_serial_string:=SouthRx frame_id:=SouthFrame
+device_serial_string:=SouthRx namespace:=rover_south frame_id:=gps_south_link 
 
 --show-args
+
 
 ros2 node list
 ros2 param set /base/ublox_dgnss CFG_MSGOUT_UBX_RXM_RTCM_USB 1
 ros2 param set /base/ublox_dgnss CFG_MSGOUT_UBX_NAV_STATUS_USB 1
 ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_RXM_RTCM_USB 1
 ros2 param set /rover/ublox_dgnss CFG_MSGOUT_UBX_NAV_STATUS_USB 1
-
+(근데 ublox_fb+r_rover.launch.py 보니까 default parameter가 이미 잘 되어 있으니 위는 무시해도 된다)
 
 ros2 topic echo /rover/fix -> 이게 존재해야 함
 ros2 topic echo /rover/ubx_rxm_rtcm -> 이게 떠야 함.
@@ -147,7 +147,7 @@ ros2 topic echo /rover/ubx_nav_hp_pos_llh
 USB가 잘 안된다면 최신 버전으로 다시 클론해 보자.
 
 
-나중에: base에 두 개 있으므로 launch param 에 namespace 변경 (rover_n / rover_s)
+나중에: base에 두 개 있으므로 launch param 에 namespace 변경 (rover_north / rover_south)
 
 
 서버 구축하기:
