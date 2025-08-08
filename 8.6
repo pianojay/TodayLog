@@ -1,0 +1,146 @@
+일단 구성 성분들을 다시 정리해보도록 할게요.
+
+https://docs.nav2.org/concepts/index.html
+
+"Server" 가 뭡니까?
+추상적으로 서버는 제공자이죠. 그리고 노드로 구현됩니다.
+그러니까 특정한 역할에 따라 뭔가를 퍼블리시하는 노드입니다.
+✅ 정리: "서버"는 특정 기능의 Action 제공자 노드이며,
+ROS2에서는 명시적으로 rclcpp_action::Server 객체를 노드 내부에 포함하여 구현됩니다.
+Modular한 구조를 유지하면서 복잡한 내비게이션 파이프라인을 나누어 관리하기 위해 필수적입니다.
+
+Behavior Tree
+추상적으로 Behavior Tree는 거대한 if-then의 tree graph라고 생각할 수 있습니다.
+이 graph의 node 들은 지각과 반응, 그리고 fallback 등이 있습니다. (흐름도라 생각하면 됨)
+Behavior Tree는 BehaviorTree.CPP에 의해 Node로 구현됩니다.
+제 생각에는 자원 낭비인 것 같아요. 그냥 멀티플렉서 노드 하나만 두면 되잖아?? 그냥 global variable 껐다 켰다 하고 확인하고 하면 되잖아?
+그러나, Behavior Tree를 ROS2 노드로 구현한다는 것은 그 semantic에 관건이 있어요.
+아주 intuitive 하게 노드를 노드로 구현하면 아무래도 생각이 줄어들죠.
+아무튼 Behavior Tree는 BTree.xml로 형태가 정의되고, BehaviorTree_node에 의해 관리되며, Action Server로 구현 됩니다.
+자원을 많이 먹지는 않나? 사실 BT는 가벼운 편이라고 합니다.
+✅ 정리: Behavior Tree는 단순히 명령 흐름을 제어하는 것이 아니라,
+복잡한 미션을 트리 구조로 정의하여 반응성, 재사용성, 표현력을 확보하는 도구입니다.
+
+Lifecycle
+ROS2의 노드가 언제 깨어나고 언제 활동을 멈추고 하는 지에 대한 관리입니다. 근데 이건 BehaviorTree가 하는 게 아니냐고요?
+그러나 여기는 "지금 무엇을 할 지"의 지능을 관리한다기 보다는 자원 관리(?)에 초점을 둡니다.
+노드가 필요할 때 깨우고(activate) 필요 없으면 재우고(inactive) 하는 겁니다.
+아무튼 Nav2는 노드 및 서버가 아주 많아지므로 있어야 하고 있어야만 제대로 작동합니다. 일일히 깨우고 재우는 걸 정해줘야 합니다.
+✅ 정리: Lifecycle은 ROS2의 모듈적 구조에 기반한 상태 기반 자원 관리 시스템입니다.
+명시적으로 노드의 초기화·해제 과정을 제어하여, 시스템 전체의 안정성과 효율성을 높입니다.
+
+Navigation Servers
+추상적으로, 이론적으로 navigation의 요소들과 그 기능들을 생각할 수 있는데, Nav2도 여기에 맞춰서 각 요소들을 Server(=Node)로 관리합니다.
+Planner, Smoother, Controller 등이 있습니다. 그 외에 Robot Footprints (/footprint) 등도 있습니다.
+단, Estimation (localization), 곧 tf: map->odom->base_link는 외부 입력으로 받으며 여기엔 robot_localization 패키지가 주로 쓰입니다.
+✅ 정리: 각 Server는 하나의 목적에 집중하는 Action Provider이며, ROS2 구조 상 독립된 노드로 구현됨.
+의존성 분리와 다양한 알고리즘의 대체 가능성을 염두에 둔 설계입니다.
+
+Map, Costmap, Layer
+Nav2에서 Map은 static한 데이터로, 말 그대로 주어진 지도를 말합니다.
+Costmap은 Map를 가공할 수도 있고, local sensor data를 받아서 가공, 곧 Occupancy Grid의 구현입니다.
+Layer는 Map/Costmap에 대한 다양한 층위의 데이터를 말합니다. 예를 들어, 같은 구역에 대해 다양한 범주의 데이터를 제공할 수 있도록 되어 있습니다.
+✅ 정리: Costmap은 Layer 기반의 계층적 구조로, 다양한 데이터 소스를 조합해 동적으로 생성됩니다.
+Layer 방식은 모듈화, 효율적 업데이트, 선택적 가시화 등을 가능케 합니다.
+
+따라서, 요소가 엄청 많은 것 같지만 알고 보면 원래 해야 할 것이 많았던 것이고, Nav2는 그것의 구현을 위해 굉장히 편리하게 설계되어 있던 것입니다.
+
+Plugins
+Server가 "무엇이 구현될 것인가?"(ex: Planner: costmap, goal pose를 받아서 path를 만듦) 에 대한 추상화라면,
+Plugin은 더 구체적인 내용(ex: A*)의 구현입니다. 즉, Server의 내용에 포함되며, config yaml에서 설정해줄 수 있습니다.
+
+🧩 내가 플러그인을 만들려면?
+예: Custom Global Planner 만들기.
+1. nav2_core::GlobalPlanner를 상속
+2. 다음 메서드 구현: configure(), activate(), deactivate(), cleanup(); createPlan(start, goal)
+3. CMake 설정:
+    pluginlib_export_plugin_description_file(nav2_core ...)
+    PLUGINLIB_EXPORT_CLASS(MyCustomPlanner, nav2_core::GlobalPlanner)
+4. YAML에 등록:
+    MyPlanner:
+        plugin: "my_package/MyCustomPlanner"
+
+
+####
+ROS2 with Nav2, map_server, global_costmap, planner_server;
+For the purpose of autonomous rover traversal, (pre-)processing static map and local terrain information from depth camera:
+
+A. Converting satellite lidar map to meaningful layers later to be used to generate costmap
+B. Converting rgb-d to traversability (or occupancy) layer
+
+Here I think I can utilize:
+1. Slope vector (from discrete gradient calculation of height)
+2. roughness (from variance data)
+3. Local Traversability / Occupancy data (from rgb-d)
+
+So the task is:
+1. Define map layers and their roles (Slope vector,  roughness scalar... / What is the difference between traversability and occupancy? / What are the utile data I can get from them?)
+2. Devise a method to convert the data available to each layers (For static map, it will be pre-computed and loaded as-is. For local data, it will be computed real time; Perhaps tf: camera->map will be used.)
+3. Later, define a good penalty function to generate costmap so the rover can go through the terrain safely. (But later!)
+
+What do you think?
+
+
+
+서로 다른 해상도에 대한 대처...
+Static은 현재 1m x 1m 로 준비되어 있다. 이에 따라 3000 by 3000의 정보를 가지게 된다. (~3km by ~3km)
+뭐 크기가 문제라기 보다는 해상도의 문제이다. 음 아닌가?
+이미 .tif 맵의 slope (x, y)와 roughness 데이터만 모아도 600MB에 육박한다.
+이걸 map_server가 publish 하면 하드웨어적으로 감당이 될까?
+아마 생각보다 작을 지도 모르겠다. 어차피 0~254로 normalize 및 축소되어야 한다... (<- .pgm 사용 가능)
+
+일단 depth camera는 해상도가 어느 정도인가? 가변이긴 한데 0.05m x 0.05m 수준.
+depth camera의 local data는 static map에서 반영되지 않는 것에 대한 보충이다.
+즉: 더 나은 해상도, 신규 데이터를 반영한다.
+
+결국 rover가 생각해야 하는 것은 "가도 안전한가?"이며,
+이것은 slope (static and local), roughness (static), 그리고 obstacle (local)의 데이터로 얻을 수 있다.
+
+
+"결국 rover가 생각해야 하는 것은 "가도 안전한가?"이다.
+다시 정리하면:
+static slope + static roughness: 모두 preprocessing으로 얻을 수 있음.
+local slope: 마찬가지로 discrete gradient로 계산할 수 있다.
+local obstacle: discrete Laplacian으로 Obstacle을 특정할 수는 있다! ("특별히 튀어나온 부분" 필터링 -> 사용...?)
+local data에 likelihood 처리를 할 수 있는 지는 모르겠지만 한다면 할 수는 있을 것 같다.
+
+그런데 Planner를 위한 최종 costmap의 해상도를 결정해야 된다. 일단 local data는 제일 현실과 가까우므로 어떤 형태로든 반영을 하는 것이 맞다.
+만약 map의 해상도에 맞춘다면 한 카메라에 대해 한 개~ 두 개 정도의 cell에 영향을 주게 된다. 이것이 충분할까?
+사실 1m by 1m 스퀘어를 피해서 돌아가는 것이 그렇게 나쁘지는 않을 수 있다. 이미 rover 가 1m by 1m이다...
+
+그러면 다시 더 중요한 것이, depth camera가 얼마나 멀리 볼 수 있는 가의 문제이다. Intellisense D435는 ~.3m - 3m 의 depth를 보여줄 수 있다고 홍보되고 있다.
+그러면 obstacle을 확인하는 것에 충분할 지도 모르겠다. camera가 너무 아래쪽을 보고 있지만 않으면 된다.
+
+이렇게 놓고 보면 global costmap의 해상도를 1m by 1m로 해도 괜찮아 보인다. local data는 로봇 주변의 몇 픽셀만 바꾸지만 그 정도로도 유용하다.
+
+
+(rgb-d의 고해상도 데이터를 local costmap에 넣고 controller의 판단 (ex: DWB)에 맡길 수도 있지 않을까? 가능하다. 사실 Nav2의 설계가 이걸 바탕으로 한다.)
+그러나 장소에 직접 가보지 않았기 때문에 즉흥적인 controller의 판단에 맡기기는 어려워 보인다. 예를 들어, Planner와 Controller가 꾸준히 대립하면 예측하지 못한 움직임을 보일 수 있다. 따라서, 업데이트 주기가 높아지더라도 방금 알게 된 정보를 Planner에 반영하는 게 좋지 않을까?
+
+이는 내가 Regulated Pure Pursuit 같은 naive 한 controller에 익숙해서일 지도 모르겠다. 여기서는 Path는 언제나 신뢰할 수 있으며, 그냥 얌전히 따라가면 된다.
+
+
+따라서 static data로 global costmap를 만들며, local data로 global costmap을 직접 amend 하는 방식으로 업데이트해서 Planner 에 전달하는 방법이 낫다고 생각했다.
+한편, local_costmap 또는 depth data의 더 높은 해상도가 아예 무효하지는 않다. 예를 들어, Regulated Pure Pursuit는 Obstacle Proximity 도 보기 때문이다.
+
+
+
+다시 정리하면:
+static map -> slope, roughness -> global costmap
+local data -> slope, obstacle -> amend global costmap
+
+
+
+####
+한번 data exploration을 해보자.
+gazebo에서 terrain 가져오기:
+https://classic.gazebosim.org/tutorials?tut=dem
+
+
+.tif to .dem:
+
+gdal을 사용한다.
+sudo apt install gdal-bin
+
+
+

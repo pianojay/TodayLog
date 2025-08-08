@@ -1,0 +1,38 @@
+Install nav2
+
+
+https://docs.nav2.org/tutorials/docs/navigation2_with_gps.html
+
+robot_localization
+
+navsat_transform_node:
+Geodetic; lat long alt -> ENU; utm coordinate system
+
++
+
+Nav2 depends on behavior tree V4: (Nav2 is apt-installed with V3 but we will use newer version.)
+https://www.behaviortree.dev/
+
++
+For Covrage Server:
+
+opennav_coverage
+https://github.com/open-navigation/opennav_coverage/tree/humble
+
+clone branch humble!
+
++
+
+opennav depends on F2C v1.2.1:
+Fields2Cover
+https://github.com/Fields2Cover/Fields2Cover/tree/v1.2.1
+
+tag v1.2.1
+
+Follow the Compilation procedure, as discussed here:
+https://github.com/open-navigation/opennav_coverage/issues/58#issuecomment-2136548573
+And the official document here:
+https://github.com/Fields2Cover/Fields2Cover/tree/v1.2.1?tab=readme-ov-file#compilation
+So you compile the Fields2Cover and again with colcon for ROS2 integration.
+
+

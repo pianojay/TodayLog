@@ -1,0 +1,37 @@
+~/lidar 만듦..
+
+Gazebo는 일단 건들지 않을 것임.
+함수는 끝남.
+Map 관련해서는 depth cam -> traversability 받는 거가 남아있긴 한데 일단은 다른 거 하고 싶음.
+
+####
+https://docs.nav2.org/behavior_trees/overview/detailed_behavior_tree_walkthrough.html
+
+오늘은 Groot 및 Behavior Tree를 공부해 보자. Groot는 나다.
+Groot는 BehaviorTree.CPP의 BT를 쉽게 수정할 수 있는 프로그램이다. 그러면 머리가 덜 아프다. 야호
+
+BT V4를 위해서는 Groot2를 설치해야 한다.
+https://www.behaviortree.dev/groot
+
+####
+https://www.behaviortree.dev/docs/learn-the-basics/bt_basics/
+
+1. Each node acts as a cellular automaton.
+2. Each nodes are connected to form a tree.
+3. A node will have a parent except root.
+4. A node can receive a tick from its parent. It sends tick to it children in order. children can give RUNNING, SUCCESS, FAILURE when it receives a tick which can change internal state of the node. The node then report either RUNNING, SUCCESS, FAILURE to its parent depending on its defined behavior.
+5. Nodes without children will be a LeafNode. They will be either Action (actuator) node or Condition (percept or internal state) node. Condition node cannot return RUNNING, as it acts as a buffer.
+6. Here, no information travels which is not a tick, RUNNING, SUCCESS, FAILURE.
+
+So we need Blackboard or ROS topic/service/action for "global" info transfer.
+
+
+
+Nav2 Nodes:
+
+Action Nodes
+
+ComputePathToPose - ComputePathToPose Action Server Client (Planner Interface)
+FollowPath - FollowPath Action Server Client (Controller Interface)
+Spin, Wait, Backup - Behaviors Action Server Client
+ClearCostmapService - ClearCostmapService Server Clients

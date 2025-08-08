@@ -1,0 +1,118 @@
+Nav2의 완전한 완성.
+
+우선 nav2를 설치한다.
+
+
+https://docs.nav2.org/setup_guides/index.html
+
+#### Quick Sketch:
+
+The components I have to consider for using Nav2:
+
+
+
+1. Estimator <- this is actually robot_localization, which will publish tf: map->odom and tf: odom->base from dual-GPS (absolute position & orientation (absolute pose)) + IMU (sensor-frame acceleration & gyro) input.
+
+Use two nodes:
+ekf_node (fuses IMU + velocity + GPS-derived odom)
+navsat_transform_node (converts GPS → odom → map)
+Publish required TFs:
+map → odom: from navsat_transform_node
+odom → base_link: from ekf_node
+world_frame: map
+odom_frame: odom
+base_link_frame: base_link
+
+
+
+
+2. Planner <- Create costmap generated from pre-obtained satellite lidar-map + traversability from depth camera, and then use absolute position of robot and goal position to generate path (or cover certain area until it finds target object)
+You will:
+
+Use a static map from Lidar/satellite raster (.pgm or .tif + .yaml)
+
+Add a custom traversability layer from your depth camera (plugin or topic subscription)
+
+Use NavFnPlanner or SmacPlanner (Hybrid-A*) for better terrain-aware paths
+
+planner_plugins: ["SmacPlanner"]
+SmacPlanner:
+  plugin: "nav2_smac_planner/SmacPlannerHybrid"
+  allow_unknown: true
+
+🔍 You may need to pre-process and embed traversability into a multi-layered costmap via plugin or external node publishing costmap updates.
+
+
+
+
+(Smoother, if needed)
+smoother_server:
+  ros__parameters:
+    smoother_plugins: ["SimpleSmoother"]
+    SimpleSmoother:
+      plugin: "nav2_smoother/SimpleSmoother"
+
+
+3. Controller <- Get v, w from Planner, regulated pure pursuit would suffice
+controller_plugins: ["FollowPath"]
+FollowPath:
+  plugin: "nav2_regulated_pure_pursuit_controller/RegulatedPurePursuitController"
+  desired_linear_vel: 0.4
+  min_lookahead_dist: 0.3
+
+
+
+4. Behavior tree <- to control total autonomous system. (goal control, recovery, search-and-find)
+<nav2_bt_navigator>/behavior_trees/navigate_w_replanning_and_recovery.xml
+You can:
+Insert custom behavior nodes (e.g., object detection trigger)
+Add subtree for search pattern, or wait-until-object-found logic
+
+<Sequence name="SearchAndDetect">
+  <NavigateToPose goal="{search_point}" />
+  <WaitForDetection topic="/object_detected" timeout="10.0"/>
+</Sequence>
+
+
+
+
+
+
+5. Gazebo setup to verify this system.
+Ensure correct sensor plugin setup:
+
+Dual GPS → /fix, /fix2
+
+IMU → /imu/data
+
+Depth camera → /depth/image_raw
+
+Publish TFs using robot_state_publisher and Gazebo plugin
+
+Use gazebo_ros_pkgs bridge for clock, topics, TFs
+
+ros2 launch your_robot_gazebo simulation.launch.py
+ros2 launch your_nav2_pkg bringup.launch.py use_sim_time:=true
+
+
+
+####
+
+
+
+[Gazebo] -> /imu, /fix, /depth/image_raw
+    ↓
+[robot_localization] -> /tf: map → odom → base_link
+    ↓
+[Nav2 Costmap Layers] ← traversability from /depth
+    ↓
+[planner_server] → global plan
+    ↓
+[smoother_server] (optional)
+    ↓
+[controller_server] → /cmd_vel
+    ↓
+[robot] (via Gazebo interface or real robot)
+
+
+
