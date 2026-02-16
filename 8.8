@@ -15,6 +15,8 @@ https://www.behaviortree.dev/groot
 
 ####
 https://www.behaviortree.dev/docs/learn-the-basics/bt_basics/
+https://docs.nav2.org/tutorials/docs/groot2.html
+
 
 1. Each node acts as a cellular automaton.
 2. Each nodes are connected to form a tree.
@@ -25,13 +27,49 @@ https://www.behaviortree.dev/docs/learn-the-basics/bt_basics/
 
 So we need Blackboard or ROS topic/service/action for "global" info transfer.
 
+Blackboards are also called as "port"
+
+####
+
+https://www.behaviortree.dev/docs/category/nodes-library
+
+Nav2 plugin Nodes:
+https://docs.nav2.org/behavior_trees/overview/nav2_specific_nodes.html
+https://github.com/ros-navigation/navigation2/tree/humble/nav2_behavior_tree/plugins
+
+1. Action Nodes, Condition Nodes ... (the leaf nodes, so the nodes that interact)
+There are a lot, including:
+action:		ComputePathToPose, FollowPath, Spin, Wait, Backup, ClearCostmapService
+condition:	GoalUpdated, GoalReached, InitialPoseReceived, isBatteryLow
+
+2. Decorator Nodes:
+Distance Controller	Will tick children nodes every time the robot has traveled a certain distance
+Rate Controller		Controls the ticking of its child node at a constant frequency. The tick rate is an exposed port
+Goal Updater		Will update the goal of children nodes via ports on the BT
+Single Trigger		Will only tick its child node once, and will return FAILURE for all subsequent ticks
+Speed Controller	Controls the ticking of its child node at a rate proportional to the robot’s speed
+
+3. Control Nodes:
+Defaults:
+Fallback
+ReactiveFallback
+Sequence
+ReactiveSequence
+SequenceWithMemory
+
+Nav2:
+
+PipelineSequence: Sequence but pipelined, so that each child end up reporting "SUCCESS" at least once (if FAIURE then interrupt as is)
+Recovery: Two children; one for main, one for recovery; If something fails, try recovery and resume.
+RoundRobin: Round robin the children until one give SUCCESS, then SUCCESS. If every node give FAILURE, then FAILURE.
+
+(the following is not added in humble branch?? this is confusing...)
+NonblockingSequence: PipelineSequence but every node has to end up reporting "RUNNING" and "SUCCESS" at all times.
+PersistentSequence: PipelineSequence but with waiting, using blackboard to store data
+PauseResumeController: Using service calls, add pause and resume.
 
 
-Nav2 Nodes:
+Now let's check what we can do and see.
 
-Action Nodes
 
-ComputePathToPose - ComputePathToPose Action Server Client (Planner Interface)
-FollowPath - FollowPath Action Server Client (Controller Interface)
-Spin, Wait, Backup - Behaviors Action Server Client
-ClearCostmapService - ClearCostmapService Server Clients
+

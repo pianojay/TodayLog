@@ -1,0 +1,15 @@
+For example
+
+[ Mission Action Server ]
+        |
+        |--- "gnss_only": Convert WGS84 to ENU, send Nav2 NavigateToPose goal (BT override: gnss_only.xml)
+        |
+        |--- "cover_vision": 
+                1. Convert WGS84 center to ENU
+                2. Generate coverage waypoints (radius)
+                3. Send Nav2 NavigateThroughPoses goal (BT override: cover_vision.xml)
+                4. BT monitors OpenCV detection condition
+                5. On detection, send new NavigateToPose to object position
+
+
+Coverage: Radial L-shape search algorithm

@@ -1,0 +1,160 @@
+Designing Behavior Tree
+
+(In terms of Nav2 Autonomous Navigation)
+
+-> Autonomous Navigation Mission
+
+Routes:
+
+- Set gate as datum!
+- GNSS-only: GNSS:(0) Goal:(~3m) -> Approach within 3m (GNSS) = Goal
+- Posts: GNSS:(5~20m) Goal:(~2m) -> Approach within 20m (GNSS) + Follow Coverage + Approach within 2m (AR tag) = Goal
+- Objects: GNSS:(~10m) Goal:(~2m) -> Approach within 10m (GNSS) + Follow Coverage, Approach within 2m (Object detection), Goal
+
+
+So there are a list of (GNSS, Goal Type) to go through.
+
+For GNSS-only, simple point - to - point
+
+For Posts and Objects, Scan through some area, which can contain obstacles. -> need more than coverage server...
+
+RPP is good, but for rough terrain: use MPPI?
+Anyway, we can swap the two. We can test and try what's best.
+
+Approach action: approach to the goal until approach proximity.
+Follow Coverage action: The terrain is unpredictable to use fixed coverage.
+Instead of planning Coverage with coverage_server, define the goal point manually and just repeat approach action. Hmm?
+
+So we can set goal points procedually with simple geometry. And then the robot will actively find a path to visit them.
+
+
+
+
+
+MPPI에 대해:
+https://www.youtube.com/watch?v=19QLyMuQ_BE
+
+
+
+
+####
+
+Command로 BT 실행하기:
+
+# Nav2 launch (이미 실행됨)
+ros2 launch nav2_bringup navigation_launch.py
+
+# 우리가 만들 action servers
+ros2 action send_goal /execute_gnss_mission your_package/action/GnssMission
+ros2 action send_goal /execute_cover_mission your_package/action/CoverMission
+
+
+
+ros2 action send_goal /execute_gnss_mission your_package/action/GnssMission \
+  "{goal_pose: {header: {frame_id: 'map'}, pose: {position: {x: 5.0, y: 3.0}}}}"
+
+
+
+
+ros2 action send_goal /execute_cover_mission your_package/action/CoverMission \
+  "{search_center: {header: {frame_id: 'map'}, pose: {position: {x: 10.0, y: 5.0}}}, 
+    search_radius: 5.0, proximity_distance: 2.0}"
+
+
+ros2 topic pub /kill_switch std_msgs/msg/Bool "data: true"
+
+
+
+
+####
+
+로봇 상태 관련 topic:
+# Subscribe to basic state
+ros2 topic echo /robot/mission_state
+
+# Output: "IDLE", "EXECUTING", "SUCCESS", or "FAILED"
+
+# Check if robot is busy
+ros2 topic echo /robot/is_busy
+
+# Output: true (executing) or false (idle/completed)
+
+# Full state information
+ros2 topic echo /robot/mission_state_detailed
+
+# Output includes:
+# - Current state
+# - Mission type (gnss/cover)
+# - Timestamps
+# - Goal poses
+# - Success details
+
+
+
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Bool
+from your_package.msg import RobotMissionState
+
+class StateMonitor(Node):
+    def __init__(self):
+        super().__init__('state_monitor')
+        
+        # Subscribe to state topics
+        self.state_sub = self.create_subscription(
+            String, '/robot/mission_state', self.state_callback, 10
+        )
+        self.busy_sub = self.create_subscription(
+            Bool, '/robot/is_busy', self.busy_callback, 10
+        )
+        self.detailed_sub = self.create_subscription(
+            RobotMissionState, '/robot/mission_state_detailed', self.detailed_callback, 10
+        )
+
+    def state_callback(self, msg):
+        if msg.data == "SUCCESS":
+            self.get_logger().info('🎉 Mission completed successfully!')
+        elif msg.data == "FAILED":
+            self.get_logger().warn('❌ Mission failed!')
+        elif msg.data == "EXECUTING":
+            self.get_logger().info('🚀 Mission in progress...')
+        elif msg.data == "IDLE":
+            self.get_logger().info('💤 Robot is idle')
+
+    def busy_callback(self, msg):
+        if msg.data:
+            self.get_logger().info('Robot is BUSY')
+        else:
+            self.get_logger().info('Robot is AVAILABLE')
+
+    def detailed_callback(self, msg):
+        self.get_logger().info(f'Detailed state: {msg.state}, Mission: {msg.mission_type}')
+        if msg.success and msg.object_found:
+            self.get_logger().info('Object was found and reached!')
+
+
+
+# 현재 상태 한 번 확인
+ros2 topic echo /robot/mission_state --once
+
+# 실시간 모니터링
+ros2 topic echo /robot/is_busy
+
+# 상세 정보
+ros2 topic echo /robot/mission_state_detailed
+
+
+####
+
+bringup
+
+behavior tree mission (run via ros2 action)
+
+Required (blackboard) parameters:
+{goal} - Target pose
+{goals} - List of poses for CoverVision
+{navtopose_server} - Usually "navigate_to_pose"
+{server_timeout} - Timeout value
+{navtopose_bt} - Base navigation behavior tree
+{navtoposes_bt} - Multi-pose navigation behavior tree

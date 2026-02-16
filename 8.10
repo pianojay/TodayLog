@@ -1,0 +1,113 @@
+I think I got a good "abstract" of how things are abstracted.
+Now I have to connect the layers of abstraction:
+
+The ROS2 Action invokes Nav2 BT with the behavior tree defined by my xml.
+The BT then realizes appropriate nodes (ex: map, costmap, planner, smoother controller) with provided configuration for each Action Nodes. (ex: NavToPose, NavThroughPoses)
+Then the nodes do the thing, orchestrated by the BT.
+Now that's hierarchial abstraction:
+ROS2 Action -> Root BT -> Action Node: Nav2 BT (NavToPose, NavThroughPoses) -> "planner, controller" Nav2 Nodes
+
+And before everything, make sure to run Nav2 Bringup, including lifecycle node...
+I think I understood the structure of Nav2 and the utilization of it clear.
+
+Now I need to make this whole thing running. Like, it is not enough to understand them component-wise... Hopefully, it should be, but it is not that simple.
+
+Please review my understanding here, and correct me if I am wrong.
+
+
+####
+
+
+ROS2 Action → Root BT → Nav2 BT Action Nodes → Nav2 Core Nodes
+     ↑              ↑            ↑                    ↑
+Your Mission    Your XML    Nav2 Primitives    Nav2 Services
+
+
+1. Lifecycle Management
+bash#
+Nav2 nodes are lifecycle nodes - they need to be configured and activated
+ros2 launch nav2_bringup navigation_launch.py
+
+2. Configuration Chain
+
+Each layer needs its config files
+Parameters must be consistent across layers
+Transform tree must be complete
+
+3. Timing and Dependencies
+
+Map server must be up before costmaps
+Localization before navigation
+All lifecycle nodes activated before BT starts
+
+4. Integration Testing Approach
+Bottom-up testing:
+
+# 1. Test core nodes first
+ros2 launch nav2_bringup navigation_launch.py
+# 2. Test basic BT
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose
+# 3. Test your custom BT
+# 4. Test your custom action server
+
+
+
+
+12:47 menny~/ros2_ws🐧 ros2 pkg list | grep nav2
+nav2_amcl
+nav2_behavior_tree
+nav2_behaviors
+nav2_bringup
+nav2_bt_navigator
+nav2_collision_monitor
+nav2_common
+nav2_constrained_smoother
+nav2_controller
+nav2_core
+nav2_costmap_2d
+nav2_dwb_controller
+nav2_lifecycle_manager
+nav2_map_server
+nav2_mppi_controller
+nav2_msgs
+nav2_navfn_planner
+nav2_planner
+nav2_regulated_pure_pursuit_controller
+nav2_rotation_shim_controller
+nav2_rviz_plugins
+nav2_simple_commander
+nav2_smac_planner
+nav2_smoother
+nav2_theta_star_planner
+nav2_util
+nav2_velocity_smoother
+nav2_voxel_grid
+nav2_waypoint_follower
+
+
+
+
+
+
+####
+차근히 해 보죠.
+https://docs.ros.org/en/humble/Tutorials/Intermediate/Creating-an-Action.html
+
+13:11 menny~/ros2_ws🐧 ros2 interface show mr2_action_interface/action/GnssOnly
+# Goal - GPS coordinate to navigate to
+float64 target_latitude
+float64 target_longitude
+---
+# Result - Final outcome
+int32 navigation_result    # 1 = SUCCESS, 0 = NOT SUCCESS
+---
+# Feedback - BT execution status
+int32 bt_status           # 1 = RUNNING, 0 = NOT RUNNING
+
+
+https://docs.ros.org/en/humble/Tutorials/Intermediate/Writing-an-Action-Server-Client/Cpp.html
+
+
+
+
+
